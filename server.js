@@ -1,5 +1,15 @@
+import express from "express";
+import Stripe from "stripe";
+import bodyParser from "body-parser";
+import cors from "cors";
+import dotenv from "dotenv";
 import admin from "firebase-admin";
-import serviceAccount from "./firebase-key.json" assert { type: "json" };
+
+// Load environment variables
+dotenv.config();
+
+// Initialize Firebase using key from environment variable
+const serviceAccount = JSON.parse(process.env.FIREBASE_KEY);
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
@@ -7,12 +17,7 @@ admin.initializeApp({
 
 const auth = admin.auth();
 
-const express = require("express");
-const Stripe = require("stripe");
-const bodyParser = require("body-parser");
-const cors = require("cors");
-require("dotenv").config();
-
+// Initialize Express + Stripe
 const app = express();
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
   apiVersion: "2024-06-20",
@@ -49,20 +54,26 @@ app.post("/webhook", bodyParser.raw({ type: "application/json" }), (req, res) =>
 
   // ✅ Handle relevant events
   switch (event.type) {
-    case "checkout.session.completed":
+    case "checkout.session.completed": {
       console.log("✅ Payment successful:", event.data.object);
 
       const session = event.data.object;
-      const customerEmail = session.customer_details.email;
+      const customerEmail = session.customer_details?.email;
 
-      // 🔗 Update Firebase user to Pro
-      auth
-        .getUserByEmail(customerEmail)
-        .then((userRecord) => auth.setCustomUserClaims(userRecord.uid, { isPro: true }))
-        .then(() => console.log(`⭐ User ${customerEmail} upgraded to Pro`))
-        .catch((error) => console.error("Error updating user:", error));
-
+      if (customerEmail) {
+        // 🔗 Update Firebase user to Pro
+        auth
+          .getUserByEmail(customerEmail)
+          .then((userRecord) =>
+            auth.setCustomUserClaims(userRecord.uid, { isPro: true })
+          )
+          .then(() => console.log(`⭐ User ${customerEmail} upgraded to Pro`))
+          .catch((error) =>
+            console.error("Error updating user:", error.message)
+          );
+      }
       break;
+    }
 
     case "customer.subscription.updated":
       console.log("🔁 Subscription updated:", event.data.object);
