@@ -93,3 +93,45 @@ app.post("/webhook", bodyParser.raw({ type: "application/json" }), (req, res) =>
 // Start server
 const PORT = process.env.PORT || 4242;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
+// ✅ Create Checkout Session route
+app.post("/create-checkout-session", async (req, res) => {
+  try {
+    const { email, plan } = req.body;
+
+    if (!email || !plan) {
+      return res.status(400).json({ error: "Missing email or plan" });
+    }
+
+    // Map plan names to Stripe price IDs (use your real ones from Stripe dashboard)
+    const prices = {
+      monthly: "price_1SMGLtJ6zNG9KpDm8EkUHEct",
+      yearly: "price_1SMY76J6zNG9KpDmr9c8L6sV",
+      lifetime: "price_1SMY8vJ6zNG9KpDmvE0ZMEfF",
+      donation: "price_1SMGLsJ6zNG9KpDmvUSdCf68",
+      test: "price_1SMaXWJ6zNG9KpDmJ1g2pALj"
+    };
+
+    const priceId = prices[plan];
+    if (!priceId) {
+      return res.status(400).json({ error: "Invalid plan" });
+    }
+
+    // ✅ Create checkout session
+    const session = await stripe.checkout.sessions.create({
+      mode: plan === "lifetime" ? "payment" : "subscription",
+      payment_method_types: ["card"],
+      customer_email: email,
+      line_items: [{ price: priceId, quantity: 1 }],
+      metadata: { plan },
+      success_url: "https://your-frontend-url.com/dashboard?success=true",
+      cancel_url: "https://your-frontend-url.com/dashboard?canceled=true",
+    });
+
+    res.json({ url: session.url });
+  } catch (err) {
+    console.error("Error creating checkout session:", err.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
