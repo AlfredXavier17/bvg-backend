@@ -1,3 +1,12 @@
+import admin from "firebase-admin";
+import serviceAccount from "./firebase-key.json" assert { type: "json" };
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+});
+
+const auth = admin.auth();
+
 const express = require("express");
 const Stripe = require("stripe");
 const bodyParser = require("body-parser");
@@ -42,13 +51,27 @@ app.post("/webhook", bodyParser.raw({ type: "application/json" }), (req, res) =>
   switch (event.type) {
     case "checkout.session.completed":
       console.log("✅ Payment successful:", event.data.object);
+
+      const session = event.data.object;
+      const customerEmail = session.customer_details.email;
+
+      // 🔗 Update Firebase user to Pro
+      auth
+        .getUserByEmail(customerEmail)
+        .then((userRecord) => auth.setCustomUserClaims(userRecord.uid, { isPro: true }))
+        .then(() => console.log(`⭐ User ${customerEmail} upgraded to Pro`))
+        .catch((error) => console.error("Error updating user:", error));
+
       break;
+
     case "customer.subscription.updated":
       console.log("🔁 Subscription updated:", event.data.object);
       break;
+
     case "customer.subscription.deleted":
       console.log("❌ Subscription canceled:", event.data.object);
       break;
+
     default:
       console.log(`⚠️ Unhandled event type: ${event.type}`);
   }
