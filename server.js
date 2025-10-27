@@ -5,42 +5,36 @@ import cors from "cors";
 import dotenv from "dotenv";
 import admin from "firebase-admin";
 
-// Load environment variables
 dotenv.config();
 
-// Initialize Firebase using key from environment variable
+// === FIREBASE SETUP ===
 const serviceAccount = JSON.parse(process.env.FIREBASE_KEY);
-
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
 });
-
 const auth = admin.auth();
 
-// Initialize Express + Stripe
+// === EXPRESS + STRIPE ===
 const app = express();
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
   apiVersion: "2024-06-20",
 });
 
-// Middleware
+// === MIDDLEWARE ===
 app.use(cors());
 
-// ✅ Use express.json() only for normal routes, not webhooks
+// Use express.json() only for normal routes (webhooks use raw)
 app.use((req, res, next) => {
-  if (req.originalUrl === "/webhook") {
-    next();
-  } else {
-    express.json()(req, res, next);
-  }
+  if (req.originalUrl === "/webhook") next();
+  else express.json()(req, res, next);
 });
 
-// Simple test route
+// === TEST ROUTE ===
 app.get("/", (req, res) => {
   res.send("BibleVerse Gate backend is running ✅");
 });
 
-// Webhook route (must use raw body)
+// === STRIPE WEBHOOK ===
 app.post("/webhook", bodyParser.raw({ type: "application/json" }), (req, res) => {
   const sig = req.headers["stripe-signature"];
   let event;
@@ -52,25 +46,33 @@ app.post("/webhook", bodyParser.raw({ type: "application/json" }), (req, res) =>
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
-  // ✅ Handle relevant events
+  // === HANDLE EVENTS ===
   switch (event.type) {
     case "checkout.session.completed": {
-      console.log("✅ Payment successful:", event.data.object);
-
       const session = event.data.object;
       const customerEmail = session.customer_details?.email;
+      const plan = session.metadata?.plan;
+
+      console.log(`✅ Payment successful for ${customerEmail} (Plan: ${plan})`);
 
       if (customerEmail) {
-        // 🔗 Update Firebase user to Pro
         auth
           .getUserByEmail(customerEmail)
-          .then((userRecord) =>
-            auth.setCustomUserClaims(userRecord.uid, { isPro: true })
-          )
-          .then(() => console.log(`⭐ User ${customerEmail} upgraded to Pro`))
-          .catch((error) =>
-            console.error("Error updating user:", error.message)
-          );
+          .then((userRecord) => {
+            // Upgrade to Pro if it’s a paid plan or test
+            if (plan === "monthly" || plan === "yearly" || plan === "lifetime" || plan === "test") {
+              return auth.setCustomUserClaims(userRecord.uid, { isPro: true });
+            } else {
+              console.log("Donation received, no Pro access added.");
+              return null;
+            }
+          })
+          .then(() => {
+            if (plan === "donation")
+              console.log(`💖 Donation from ${customerEmail}, thank you!`);
+            else console.log(`⭐ ${customerEmail} upgraded to Pro`);
+          })
+          .catch((error) => console.error("Error updating user:", error.message));
       }
       break;
     }
@@ -90,36 +92,33 @@ app.post("/webhook", bodyParser.raw({ type: "application/json" }), (req, res) =>
   res.json({ received: true });
 });
 
-// Start server
-const PORT = process.env.PORT || 4242;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
-
-// ✅ Create Checkout Session route
+// === CREATE CHECKOUT SESSION ===
 app.post("/create-checkout-session", async (req, res) => {
   try {
     const { email, plan } = req.body;
+    if (!email || !plan) return res.status(400).json({ error: "Missing email or plan" });
 
-    if (!email || !plan) {
-      return res.status(400).json({ error: "Missing email or plan" });
-    }
-
-    // Map plan names to Stripe price IDs (use your real ones from Stripe dashboard)
+    // Map plan names to Stripe price IDs
     const prices = {
-      monthly: "price_1SMGLtJ6zNG9KpDm8EkUHEct",
-      yearly: "price_1SMY76J6zNG9KpDmr9c8L6sV",
-      lifetime: "price_1SMY8vJ6zNG9KpDmvE0ZMEfF",
-      donation: "price_1SMGLsJ6zNG9KpDmvUSdCf68",
-      test: "price_1SMaXWJ6zNG9KpDmJ1g2pALj"
+      monthly: "price_1SMGLtJ6zNG9KpDm8EkUHEct",   // recurring
+      yearly: "price_1SMY76J6zNG9KpDmr9c8L6sV",    // recurring
+      lifetime: "price_1SMY8vJ6zNG9KpDmvE0ZMEfF",  // one-time
+      donation: "price_1SMGLsJ6zNG9KpDmvUSdCf68",  // one-time
+      test: "price_1SMaXWJ6zNG9KpDmJ1g2pALj",      // one-time test
     };
 
     const priceId = prices[plan];
-    if (!priceId) {
-      return res.status(400).json({ error: "Invalid plan" });
-    }
+    if (!priceId) return res.status(400).json({ error: "Invalid plan" });
 
-    // ✅ Create checkout session
+    // Choose correct checkout mode
+    const mode =
+      plan === "lifetime" || plan === "donation" || plan === "test"
+        ? "payment"
+        : "subscription";
+
+    // Create checkout session
     const session = await stripe.checkout.sessions.create({
-      mode: plan === "lifetime" ? "payment" : "subscription",
+      mode,
       payment_method_types: ["card"],
       customer_email: email,
       line_items: [{ price: priceId, quantity: 1 }],
@@ -135,3 +134,6 @@ app.post("/create-checkout-session", async (req, res) => {
   }
 });
 
+// === START SERVER ===
+const PORT = process.env.PORT || 4242;
+app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
