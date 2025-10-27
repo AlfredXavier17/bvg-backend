@@ -134,6 +134,36 @@ app.post("/create-checkout-session", async (req, res) => {
   }
 });
 
+
+// === CREATE CUSTOMER PORTAL SESSION ===
+app.post("/create-portal-session", async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: "Missing email" });
+
+    // Find or create the Stripe customer
+    const customers = await stripe.customers.list({ email, limit: 1 });
+    let customer;
+    if (customers.data.length > 0) {
+      customer = customers.data[0];
+    } else {
+      customer = await stripe.customers.create({ email });
+    }
+
+    // Create the billing portal session
+    const session = await stripe.billingPortal.sessions.create({
+      customer: customer.id,
+      return_url: "https://bibleversegate.com/dashboard", // change to your real return URL if needed
+    });
+
+    res.json({ url: session.url });
+  } catch (err) {
+    console.error("Portal session error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
 // === START SERVER ===
 const PORT = process.env.PORT || 4242;
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
