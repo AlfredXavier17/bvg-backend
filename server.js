@@ -123,8 +123,8 @@ app.post("/create-checkout-session", async (req, res) => {
       customer_email: email,
       line_items: [{ price: priceId, quantity: 1 }],
       metadata: { plan },
-      success_url: "https://your-frontend-url.com/dashboard?success=true",
-      cancel_url: "https://your-frontend-url.com/dashboard?canceled=true",
+      success_url: "https://bibleversegate.com/success",
+      cancel_url: "https://bibleversegate.com/success/cancel",
     });
 
     res.json({ url: session.url });
