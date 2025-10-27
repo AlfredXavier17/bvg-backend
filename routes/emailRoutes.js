@@ -10,7 +10,7 @@ const router = express.Router();
 
 // === FIREBASE ADMIN SETUP (from env instead of file) ===
 if (!admin.apps.length) {
-  const serviceAccount = JSON.parse(process.env.FIREBASE_KEY_JSON);
+  const serviceAccount = JSON.parse(process.env.FIREBASE_KEY);
 
   admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
