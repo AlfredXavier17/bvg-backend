@@ -3,27 +3,14 @@ import express from "express";
 import nodemailer from "nodemailer";
 import admin from "firebase-admin";
 import dotenv from "dotenv";
-import path from "path";
-import { fileURLToPath } from "url";
 
 dotenv.config();
 
 const router = express.Router();
 
-// === FIREBASE ADMIN SETUP ===
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
+// === FIREBASE ADMIN SETUP (from env instead of file) ===
 if (!admin.apps.length) {
-  const serviceAccount = JSON.parse(
-    JSON.stringify(
-      JSON.parse(
-        await import(path.join(__dirname, "../firebase-key.json"), {
-          assert: { type: "json" },
-        })
-      ).default
-    )
-  );
+  const serviceAccount = JSON.parse(process.env.FIREBASE_KEY_JSON);
 
   admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
@@ -48,6 +35,7 @@ router.post("/send-reset", async (req, res) => {
   try {
     const { email } = req.body;
     const link = await auth.generatePasswordResetLink(email);
+
     await transporter.sendMail({
       from: `"BibleVerse Gate" <${process.env.ZOHO_EMAIL}>`,
       to: email,
@@ -62,6 +50,7 @@ router.post("/send-reset", async (req, res) => {
         <p>If you didn’t request this, you can safely ignore it.</p>
       `,
     });
+
     res.json({ success: true });
   } catch (err) {
     console.error("Error sending reset email:", err);
@@ -73,8 +62,8 @@ router.post("/send-reset", async (req, res) => {
 router.post("/send-verification", async (req, res) => {
   try {
     const { email } = req.body;
-    const user = await auth.getUserByEmail(email);
     const link = await auth.generateEmailVerificationLink(email);
+
     await transporter.sendMail({
       from: `"BibleVerse Gate" <${process.env.ZOHO_EMAIL}>`,
       to: email,
@@ -89,6 +78,7 @@ router.post("/send-verification", async (req, res) => {
         <p>If you didn’t sign up, please ignore this message.</p>
       `,
     });
+
     res.json({ success: true });
   } catch (err) {
     console.error("Error sending verification email:", err);
