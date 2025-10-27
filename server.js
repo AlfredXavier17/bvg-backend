@@ -4,6 +4,8 @@ import bodyParser from "body-parser";
 import cors from "cors";
 import dotenv from "dotenv";
 import admin from "firebase-admin";
+import emailRoutes from "./routes/emailRoutes.js";
+
 
 dotenv.config();
 
@@ -133,6 +135,8 @@ app.post("/create-checkout-session", async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
+
+app.use("/api/email", emailRoutes);
 
 // === START SERVER ===
 const PORT = process.env.PORT || 4242;
