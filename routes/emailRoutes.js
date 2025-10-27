@@ -8,13 +8,15 @@ dotenv.config();
 
 const router = express.Router();
 
-// === FIREBASE ADMIN SETUP (from env instead of file) ===
+// === FIREBASE ADMIN SETUP (safe against duplicate init) ===
 if (!admin.apps.length) {
   const serviceAccount = JSON.parse(process.env.FIREBASE_KEY);
 
   admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
   });
+} else {
+  admin.app(); // reuse existing app if already initialized
 }
 
 const auth = admin.auth();
