@@ -8,15 +8,18 @@ dotenv.config();
 
 const router = express.Router();
 
-// === FIREBASE ADMIN SETUP (safe against duplicate init) ===
-if (!admin.apps.length) {
-  const serviceAccount = JSON.parse(process.env.FIREBASE_KEY);
-
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-  });
-} else {
-  admin.app(); // reuse existing app if already initialized
+// === FIREBASE ADMIN SETUP (safe for hot reloads / duplicate init) ===
+try {
+  if (!admin.apps.length) {
+    const serviceAccount = JSON.parse(process.env.FIREBASE_KEY);
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+    });
+  }
+} catch (error) {
+  if (!/already exists/u.test(error.message)) {
+    console.error("Firebase init error:", error);
+  }
 }
 
 const auth = admin.auth();
@@ -45,7 +48,7 @@ router.post("/send-reset", async (req, res) => {
       html: `
         <h2>Password Reset</h2>
         <p>Click the button below to reset your password:</p>
-        <a href="${link}" 
+        <a href="${link}"
           style="display:inline-block;padding:10px 20px;background:#6a5acd;color:#fff;text-decoration:none;border-radius:6px;">
           Reset Password
         </a>
@@ -73,7 +76,7 @@ router.post("/send-verification", async (req, res) => {
       html: `
         <h2>Verify your email</h2>
         <p>Click the button below to confirm your account:</p>
-        <a href="${link}" 
+        <a href="${link}"
           style="display:inline-block;padding:10px 20px;background:#228b22;color:#fff;text-decoration:none;border-radius:6px;">
           Verify Email
         </a>
